@@ -18,3 +18,5 @@ Below are few points of the solutions.
 
 7. All the api's are validated through postman.
 
+
+Note: Dockerfile cannot be validated on local due to local docker setup issue on windows.
