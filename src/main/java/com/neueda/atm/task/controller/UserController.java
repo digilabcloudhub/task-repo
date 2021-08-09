@@ -26,6 +26,9 @@ public class UserController {
 
 	@Autowired
 	private UserService usrService;
+	
+	private static final String INSUFFICIENT_BALANCE="Insufficient Amount in Account";
+	private static final String INVALID_PIN="Invalid Pincode/Account Number";
 
 	@CrossOrigin
 	@GetMapping("/balance")
@@ -44,7 +47,7 @@ public class UserController {
 			return new ResponseEntity<>(success, HttpStatus.OK);
 
 		} else {
-			throw new ResourceNotAutenticateException("Invalid Pincode");
+			throw new ResourceNotAutenticateException(INVALID_PIN);
 		}
 
 	}
@@ -58,17 +61,18 @@ public class UserController {
 
 		if (null != user) {
 			Integer maxAmountToWithDraw = user.getMaxAmount();
-			if (maxAmountToWithDraw > request.getWithdrawalAmount()) {
+			if (maxAmountToWithDraw >= request.getWithdrawalAmount()) {
 				userResponse=usrService.withdraw(request,user);
+				//userResponse=usrService.withdrawRefactor(request, user);
 				if(null!=userResponse.getErrorMessage() && !userResponse.getErrorMessage().isEmpty()) {
 					throw new InsufficientBalanceException(userResponse.getErrorMessage());
 				}
 			} else {
-				throw new InsufficientBalanceException("Insufficient Amount in Account");
+				throw new InsufficientBalanceException(INSUFFICIENT_BALANCE);
 			}
 
 		} else {
-			throw new ResourceNotAutenticateException("Invalid Pincode");
+			throw new ResourceNotAutenticateException(INVALID_PIN);
 		}
 
 		return  new ResponseEntity<>(userResponse, HttpStatus.OK);

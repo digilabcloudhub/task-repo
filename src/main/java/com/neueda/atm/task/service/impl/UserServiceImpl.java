@@ -4,6 +4,8 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -22,6 +24,13 @@ public class UserServiceImpl implements UserService {
 	private UserRepository userRepository;
 	@Autowired
 	private ATMInitService atmServices;
+	AtomicInteger remainingBalance = new AtomicInteger(0);
+	AtomicInteger totalAmountLeft = new AtomicInteger(0);
+	private static Map<Integer, Integer> denonminatioMap = new ConcurrentHashMap<>();
+
+	private static final String ERROR_DISPERSE_CASH = "Not enough cash to dispense";
+	private static final String INCORRECT_DENOMINATION = "Incorrect Amount Entered.Kindly enter amount in multiple of 5";
+	private static final String SUCCESS = "Transaction Successfull";
 
 	@Override
 	public Optional<User> findById(String id) {
@@ -34,10 +43,41 @@ public class UserServiceImpl implements UserService {
 	public User isAuthenticated(UserRequest user) {
 		// TODO Auto-generated method stub
 		Optional<User> userDetails = userRepository.findById(user.getAccount_number());
-		if (userDetails.get().getPin() == user.getPin()) {
-			return userDetails.get();
+		if(userDetails.isPresent()) {
+			if (userDetails.get().getPin() == user.getPin()) {
+				return userDetails.get();
+			}
 		}
+		
 		return null;
+	}
+
+	
+
+	private Integer calculate(Integer amount, int denom, int remainingBalance) {
+		Integer value = 0;
+		Integer updatedValue = (Integer) denonminatioMap.get(denom);
+		ATMModel updated = new ATMModel();
+		value = amount / denom;
+		if (value > 0) {
+			if (updatedValue < value) {
+				denonminatioMap.put(denom, 0);
+				amount = amount - (denom * updatedValue);
+
+			} else {
+
+				amount = amount % denom;
+				denonminatioMap.put(denom, updatedValue - value);
+
+			}
+		}
+
+		System.out.println("denom left" + denom + denonminatioMap.get(denom));
+		updated.setCurrencyMap(denonminatioMap);
+		updated.setInitialBalance(remainingBalance);
+		atmServices.setATMBalance(updated);
+		return amount;
+
 	}
 
 	@Override
@@ -45,106 +85,102 @@ public class UserServiceImpl implements UserService {
 		Optional<User> userDetails = userRepository.findById(user.getAccount_number());
 		User customer = new User();
 		ATMModel atmTrans = atmServices.getATMBalance();
-		ATMModel updated = new ATMModel();
-		Map<Integer, Integer> denomMap = atmTrans.getCurrencyMap();
-		Map<Integer, Integer> dispersedCurrency = new HashMap();
-		Integer amountLeft = 0;
-		UserResponseModel userResponse = new UserResponseModel();
-		Integer remainingBal = atmTrans.getInitialBalance();
 		Integer value = 0;
+
+		denonminatioMap = atmTrans.getCurrencyMap();
+
+		Map<Integer, Integer> dispersedCurrency = new HashMap();
+
+		UserResponseModel userResponse = new UserResponseModel();
+
+		remainingBalance = new AtomicInteger(atmTrans.getInitialBalance());
+
 		if (atmTrans.getInitialBalance() < user.getWithdrawalAmount()) {
-			userResponse.setErrorMessage("Not enough cash to dispense");
+			userResponse.setErrorMessage(ERROR_DISPERSE_CASH);
 			return userResponse;
 		} else {
-			remainingBal = remainingBal - user.getWithdrawalAmount();
-			amountLeft = userDetails.get().getMaxAmount() - user.getWithdrawalAmount();
+
+			remainingBalance.compareAndSet(remainingBalance.get(), remainingBalance.get() - user.getWithdrawalAmount());
+
+			totalAmountLeft.compareAndSet(totalAmountLeft.get(),
+					userDetails.get().getMaxAmount() - user.getWithdrawalAmount());
 		}
-		// Check denomination part
+
 		if (user.getWithdrawalAmount() % 5 != 0) {
-			userResponse.setErrorMessage("Incorrect Amount Entered.Kindly enter amount in multiple of 5");
+			userResponse.setErrorMessage(INCORRECT_DENOMINATION);
 			return userResponse;
 		}
 		int checkAmount = user.getWithdrawalAmount();
 
-		if (checkAmount > 0 && denomMap.get(50) > 0) {
-			Integer updatedValue = (Integer) denomMap.get(50);
+		if (checkAmount > 0 && denonminatioMap.get(50) > 0) {
+
+			Integer updatedValue = (Integer) denonminatioMap.get(50);
 			value = checkAmount / 50;
-
-			if (updatedValue < value) {
-				denomMap.put(50, 0);
-				checkAmount = checkAmount - (50 * updatedValue);
-				dispersedCurrency.put(50, updatedValue);
-			} else {
-				value = checkAmount / 50;
-				checkAmount = checkAmount % 50;
-				denomMap.put(50, updatedValue - value);
-				dispersedCurrency.put(50, value);
+			if (value > 0) {
+				if (updatedValue < value) {
+					dispersedCurrency.put(50, updatedValue);
+				} else {
+					dispersedCurrency.put(50, value);
+				}
 			}
 
+			checkAmount = calculate(checkAmount, 50, remainingBalance.get());
+
 		}
-		if (checkAmount > 0 && denomMap.get(20) > 0) {
-			Integer updatedValue = (Integer) denomMap.get(20);
+		if (checkAmount > 0 && denonminatioMap.get(20) > 0) {
+			Integer updatedValue = (Integer) denonminatioMap.get(20);
 			value = checkAmount / 20;
-
-			if (updatedValue < value) {
-				denomMap.put(20, 0);
-				checkAmount = checkAmount - (20 * updatedValue);
-				dispersedCurrency.put(20, updatedValue);
-			} else {
-				value = checkAmount / 20;
-				checkAmount = checkAmount % 20;
-				denomMap.put(20, updatedValue - value);
-				dispersedCurrency.put(20, value);
+			if (value > 0) {
+				if (updatedValue < value) {
+					dispersedCurrency.put(20, updatedValue);
+				} else {
+					dispersedCurrency.put(20, value);
+				}
 			}
 
+			checkAmount = calculate(checkAmount, 20, remainingBalance.get());
+
 		}
-		if (checkAmount > 0 && denomMap.get(10) > 0) {
-			Integer updatedValue = (Integer) denomMap.get(10);
+		if (checkAmount > 0 && denonminatioMap.get(10) > 0) {
+			Integer updatedValue = (Integer) denonminatioMap.get(10);
 			value = checkAmount / 10;
-
-			if (updatedValue < value) {
-				denomMap.put(10, 0);
-				checkAmount = checkAmount - (10 * updatedValue);
-				dispersedCurrency.put(10, updatedValue);
-			} else {
-				value = checkAmount / 10;
-				checkAmount = checkAmount % 10;
-				denomMap.put(10, updatedValue - value);
-				dispersedCurrency.put(10, value);
+			if (value > 0) {
+				if (updatedValue < value) {
+					dispersedCurrency.put(10, updatedValue);
+				} else {
+					dispersedCurrency.put(10, value);
+				}
 			}
+
+			checkAmount = calculate(checkAmount, 10, remainingBalance.get());
 		}
 
-		if (checkAmount > 0 && denomMap.get(5) > 0) {
-			Integer updatedValue = (Integer) denomMap.get(5);
+		if (checkAmount > 0 && denonminatioMap.get(5) > 0) {
+			Integer updatedValue = (Integer) denonminatioMap.get(5);
 			value = checkAmount / 5;
-
-			if (updatedValue < value) {
-				denomMap.put(5, 0);
-				checkAmount = checkAmount - (5 * updatedValue);
-				dispersedCurrency.put(5, updatedValue);
-			} else {
-				value = checkAmount / 5;
-				checkAmount = checkAmount % 5;
-				denomMap.put(5, updatedValue - value);
-				dispersedCurrency.put(5, value);
+			if (value > 0) {
+				if (updatedValue < value) {
+					dispersedCurrency.put(5, updatedValue);
+				} else {
+					dispersedCurrency.put(5, value);
+				}
 			}
+
+			checkAmount = calculate(checkAmount, 5, remainingBalance.get());
 		}
-		updated.setCurrencyMap(denomMap);
-		updated.setInitialBalance(remainingBal);
-		atmServices.setATMBalance(updated);
 
 		userResponse.setDisburesedMap(dispersedCurrency);
-		userResponse.setMessage("Success");
+		userResponse.setMessage(SUCCESS);
 		userResponse.setTimestamp(LocalDateTime.now());
+		userResponse.setRemainingBalance(totalAmountLeft.get());
+
 		customer.setId(user.getAccount_number());
 		customer.setOpeningBalance(cust.getOpeningBalance());
 		customer.setOverDraft(cust.getOverDraft());
 		customer.setPin(cust.getPin());
-		customer.setMaxAmount(amountLeft);
+		customer.setMaxAmount(totalAmountLeft.get());
 		userRepository.save(customer);
-		userResponse.setRemainingBalance(amountLeft);
 
 		return userResponse;
 	}
-
 }

@@ -15,4 +15,5 @@ public interface UserService {
 	public User isAuthenticated(UserRequest user);
 	public UserResponseModel withdraw(UserRequest user,User customer);
 
+
 }
