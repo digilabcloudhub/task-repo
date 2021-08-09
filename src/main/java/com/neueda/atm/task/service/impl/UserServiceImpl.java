@@ -24,8 +24,8 @@ public class UserServiceImpl implements UserService {
 	private UserRepository userRepository;
 	@Autowired
 	private ATMInitService atmServices;
-	AtomicInteger remainingBalance = new AtomicInteger(0);
-	AtomicInteger totalAmountLeft = new AtomicInteger(0);
+	private final AtomicInteger remainingBalance = new AtomicInteger(0);
+	private final AtomicInteger totalAmountLeft = new AtomicInteger(0);
 	private static Map<Integer, Integer> denonminatioMap = new ConcurrentHashMap<>();
 
 	private static final String ERROR_DISPERSE_CASH = "Not enough cash to dispense";
@@ -72,7 +72,6 @@ public class UserServiceImpl implements UserService {
 			}
 		}
 
-		System.out.println("denom left" + denom + denonminatioMap.get(denom));
 		updated.setCurrencyMap(denonminatioMap);
 		updated.setInitialBalance(remainingBalance);
 		atmServices.setATMBalance(updated);
@@ -93,9 +92,9 @@ public class UserServiceImpl implements UserService {
 
 		UserResponseModel userResponse = new UserResponseModel();
 
-		remainingBalance = new AtomicInteger(atmTrans.getInitialBalance());
+		remainingBalance.compareAndSet(remainingBalance.get(),atmTrans.getInitialBalance());
 
-		if (atmTrans.getInitialBalance() < user.getWithdrawalAmount()) {
+		if (remainingBalance.get() < user.getWithdrawalAmount()) {
 			userResponse.setErrorMessage(ERROR_DISPERSE_CASH);
 			return userResponse;
 		} else {
