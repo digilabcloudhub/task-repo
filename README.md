@@ -1,8 +1,9 @@
 ATM Machine Solution
 
-Below are few points of the solutions.
+Below are few points of the solution.
 
 1. Applications contain two endpoint
+   
     a. atm/balance
     b. atm/withdrawal
     
