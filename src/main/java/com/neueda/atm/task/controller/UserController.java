@@ -18,14 +18,14 @@ import com.neueda.atm.task.exception.ResourceNotAutenticateException;
 import com.neueda.atm.task.model.RegisterResponse;
 import com.neueda.atm.task.model.UserRequest;
 import com.neueda.atm.task.model.UserResponseModel;
-import com.neueda.atm.task.service.UserService;
+import com.neueda.atm.task.service.ATMService;
 
 @RestController
 @RequestMapping("atm")
 public class UserController {
 
 	@Autowired
-	private UserService usrService;
+	private ATMService usrService;
 	
 	private static final String INSUFFICIENT_BALANCE="Insufficient Amount in Account";
 	private static final String INVALID_PIN="Invalid Pincode/Account Number";
